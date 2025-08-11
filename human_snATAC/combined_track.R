@@ -70,24 +70,24 @@ S1[["DAR_podocyte3"]] <- CreateChromatinAssay(
 )
 
 # coverage plot
-region <- "chr1-155287293-155303438"
-cov_plot <- CoveragePlot(object = S1, region = region, annotation = FALSE, peaks = FALSE, links = FALSE) & scale_fill_manual(values=c("#00b0f6","darkorange","darkorchid","navajowhite3","forestgreen")) 
-+ theme(axis.title.y = element_text(size=10))
-gene_plot <- AnnotationPlot(object = S1, region = region)+ theme(axis.title.y = element_text(size=0))
-peak_plot_2 <- PeakPlot(object = S1, assay = "DAR_podocyte3", color = "#1C8629", region = region) + theme(axis.title.y = element_text(size=0))
-peak_plot_3 <- PeakPlot(object = S1, assay = "HNF4A_ChIP", color = "#1C8629", region = region) + theme(axis.title.y = element_text(size=0))
-link_plot <- LinkPlot(object = S1, region = region) + theme(legend.position="none")+ theme(axis.title.y = element_text(size=0))
+region <- "chr1-155299000-155301462" #PKLR
+region <- "chr17-7215125-7227267" #ACADVL
+region <- "chr9-101421388-101436287" #ALDOB
+region <- "chr7-73591201-73626522" #MLXIPL
+
+cov_plot <- CoveragePlot(object = S1, region = region, annotation = TRUE, peaks = TRUE, links = TRUE) & scale_fill_manual(values=c("#00b0f6","darkorange","darkorchid","navajowhite3","forestgreen"))
+peak_plot2 <- PeakPlot(object = S1, assay = "DAR_DP", color = "red", region = region) + ylab("DAR") + theme(axis.title.y = element_text(size=10))
+peak_plot3 <- PeakPlot(object = S1, assay = "HNF4A", color = "black", region = region) + ylab("HNF4A") + theme(axis.title.y = element_text(size=10))
 coverage_plot <- BigwigTrack(region = region, bigwig = "/mnt/d/public_datasets/ENCFF531OYO.bigWig", smooth = 300, bigwig.scale = "separate")+
   scale_fill_manual(values = "black")+ theme(legend.position="none")+ theme(axis.title.y = element_text(size=0)) +theme(axis.title.y = element_blank())
 
 CombineTracks(
-  plotlist = list(cov_plot, gene_plot,
-                  peak_plot,peak_plot_2,peak_plot_3,
+  plotlist = list(cov_plot,
+                  peak_plot2,
                   coverage_plot,
-                  link_plot),
-  heights = c(2,0.5,
-              0.1,0.1,0.1,
-              0.7,
-              0.5),
-  widths = c(10, 1)
+                  peak_plot3),
+  heights = c(2,
+              0.1,
+              0.2,
+              0.1)
 ) 
