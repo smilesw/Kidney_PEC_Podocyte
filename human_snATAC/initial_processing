@@ -184,5 +184,5 @@ DimPlot(kidney_sub, label = T)
 kidney_sub@active.ident=factor(kidney_sub@active.ident, levels = c("PCT","PST","PT_VCAM1","TAL","DCT","CNT","PC","ICA","ICB","PODO","PEC","MES_FIB","ENDO","LEUK"))
 
 kidney_sub@assays$peaks@fragments[[1]]@path="/mnt/d/snATAC_public/outs/fragments.tsv.gz"
-kidney_sub@meta.data$celltype <- Idents(Skidney_sub)
+kidney_sub@meta.data$celltype <- Idents(kidney_sub)
 saveRDS(kidney_sub, file="D:/public_datasets/GSE195460_snATAC/GSE195460_snATAC.Rds")
