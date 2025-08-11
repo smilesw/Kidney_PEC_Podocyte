@@ -33,7 +33,7 @@ GetMarkers <- function(cluster, seurat) {
   return(merge(dar, cf, by="query_region"))
 }
 list.cluster.dar <- lapply(idents, function(x) {GetMarkers(x, seurat = S1)})
-write.xlsx(list.cluster.dar, file = "D:/public_datasets/GSE195460_snATAC/DAR_fdr2.xlsx", sheetName = idents, rowNames = T)
+write.xlsx(list.cluster.dar, file = "D:/public_datasets/GSE195460_snATAC/DAR.xlsx", sheetName = idents, rowNames = T)
 
 # identify all unique cell-type-specific peaks and filter for logfc > 0
 all_dar <- bind_rows(list.cluster.dar) %>%
