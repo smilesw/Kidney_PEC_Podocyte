@@ -1,0 +1,188 @@
+library(Signac) 
+library(Seurat) 
+library(GenomeInfoDb)
+library(harmony)
+library(EnsDb.Hsapiens.v86)
+library(ggplot2) 
+library(patchwork) 
+library(tibble) 
+library(dplyr) 
+library(here) 
+library(data.table) 
+
+dir.create(here("project","analysis","dkd","atac_aggr_prep","plots"), recursive=TRUE, showWarnings=FALSE)
+atac_aggr_prep <- here("project","analysis","dkd","atac_aggr_prep")
+
+counts <- Read10X_h5("./filtered_peak_bc_matrix.h5")
+metadata <- read.csv("./singlecell.csv", header = TRUE, row.names = 1)
+aggcsv <- read.csv("./aggregation_csv.csv", header = TRUE, row.names = 1)
+
+chrom_assay <- CreateChromatinAssay(
+  counts = counts,
+  sep = c(":", "-"),
+  genome = 'hg38',
+  fragments = "./fragments.tsv.gz",
+  min.cells = 10,
+  min.features = 200
+)
+
+kidney <- CreateSeuratObject(
+  counts = chrom_assay,
+  assay = "peaks",
+  meta.data = metadata
+)
+
+# Add the patient information and disease status to the metadata of the Seurat object
+gemgroup <- sapply(strsplit(rownames(kidney@meta.data), split="-"), "[[", 2) 
+current.gemgroups <- seq(length(rownames(aggcsv))) # no. gemgroups is no. samples
+orig.ident <- rownames(aggcsv)
+sampleID <- plyr::mapvalues(gemgroup, from = current.gemgroups, to = orig.ident)
+kidney <- AddMetaData(object=kidney, metadata=data.frame(orig.ident=sampleID, 
+                                                         row.names=rownames(kidney@meta.data)))
+rm(counts, metadata)
+
+# extract gene annotations from EnsDb
+annotations <- GetGRangesFromEnsDb(ensdb = EnsDb.Hsapiens.v86)
+
+# change to UCSC style since the data was mapped to hg38
+seqlevelsStyle(annotations) <- 'UCSC'
+genome(annotations) <- "hg38"
+
+# add the gene information to the object
+Annotation(kidney) <- annotations
+
+# compute nucleosome signal score per cell
+kidney <- NucleosomeSignal(object = kidney)
+
+# Add the metadata for mitochondrial fragments from individual snATACseq counts into the aggregated dataset 
+# Collect total fragment number data from each of the original CellRangerATAC datasets.
+metaqc <- 
+  lapply(current.gemgroups, 
+         function(gemgroup) {
+           sampleName <- rownames(aggcsv)[gemgroup]
+           file <- here("E:/GSE151302/snATACseq/",sampleName,sampleName,"outs","singlecell.csv")
+           df <- read.csv(file, header=TRUE, row.names=1)
+           rownames(df) <- paste(substr(rownames(df), 1, 16), gemgroup, sep = "-") # change gemgroup to reflect sample order
+           df <- tibble::rownames_to_column(df, var = "barcode")
+           return(df)
+         }
+  ) %>%
+  bind_rows() %>%
+  tibble::column_to_rownames(var = "barcode") %>%
+  dplyr::select(c("total","mitochondrial"))
+
+kidney <- AddMetaData(kidney,metaqc)
+remove(metaqc)
+
+# compute TSS enrichment score per cell
+kidney <- TSSEnrichment(object = kidney, fast = FALSE)
+
+# add blacklist ratio and fraction of reads in peaks
+kidney$pct_reads_in_peaks <- kidney$peak_region_fragments / kidney$passed_filters * 100 # %fragments in peaks
+kidney$mito_ratio <- kidney$mitochondrial / kidney$total # %fragments mapping to mitochondrial genome
+kidney$nucleosome_group <- ifelse(kidney$nucleosome_signal > 4, 'NS > 4', 'NS < 4')
+kidney$high.tss <- ifelse(kidney$TSS.enrichment > 2, 'High', 'Low')
+
+VlnPlot(
+  object = kidney,
+  features = c('pct_reads_in_peaks','peak_region_fragments','mito_ratio'), 
+  pt.size = 0,
+  ncol = 2) + NoLegend()
+p1 <- qplot(kidney@meta.data$pct_reads_in_peaks, geom="histogram")
+p2 <- qplot(kidney@meta.data$peak_region_fragments, geom="histogram")
+p3 <- qplot(kidney@meta.data$mito_ratio, geom="histogram")
+print(list(p1,p2,p3))
+FragmentHistogram(object = kidney, group.by = 'nucleosome_group')
+TSSPlot(kidney, group.by = 'high.tss') + ggtitle("TSS enrichment score") + NoLegend()
+dev.off()
+
+kidney_sub <- subset(
+  x = kidney,
+  subset = peak_region_fragments > 2500 &
+    peak_region_fragments < 20000 &
+    nucleosome_signal < 4 &
+    TSS.enrichment > 2
+)
+
+# perform normalization and dimensional reduction of filtered snATAC object
+kidney_sub <- RunTFIDF(kidney_sub)
+kidney_sub <- FindTopFeatures(kidney_sub, min.cutoff = 'q0')
+kidney_sub <- RunSVD(kidney_sub)
+
+# show that first dimension is related to depth of sequencing
+DepthCor(kidney_sub)
+
+# ElbowPlot(kidney_sub, ndim = 40) # select number of dimensions for UMAP embedding
+kidney_sub <- RunHarmony(kidney_sub, group.by.vars = "orig.ident", reduction.use = "lsi", assay.use = "peaks", project.dim = FALSE)
+kidney_sub <- FindNeighbors(object = kidney_sub, reduction = "harmony", dims = 2:30)
+kidney_sub <- FindClusters(object = kidney_sub, verbose = TRUE, algorithm = 1) # Louvain algorithm
+kidney_sub <- RunUMAP(object = kidney_sub, reduction = "harmony", dims = 2:30)
+
+#
+cell=read.csv("D:/public datasets/GSE195460_snATAC/atac_barcodes.csv")
+group = names(table(cell$orig.ident))
+cell$group <- plyr::mapvalues(cell$orig.ident, from = group, to = current.gemgroups)
+cell$barcode_new=paste(cell$barcode, cell$group, sep="-")
+kidney_sub = subset(kidney_sub, cells=cell$barcode_new)
+
+kidney_sub <- FindNeighbors(object = kidney_sub, reduction = "harmony", dims = 2:30)
+kidney_sub <- FindClusters(object = kidney_sub, verbose = TRUE, algorithm = 1) # Louvain algorithm
+kidney_sub <- RunUMAP(object = kidney_sub, reduction = "harmony", dims = 2:30)
+DimPlot(kidney_sub)
+
+# create gene activity matrix
+gene.activities <- GeneActivity(kidney_sub)
+kidney_sub[['RNA']] <- CreateAssayObject(counts = gene.activities)
+kidney_sub <- NormalizeData(
+  object = kidney_sub,
+  assay = 'RNA',
+  normalization.method = 'LogNormalize',
+  scale.factor = median(kidney_sub$nCount_RNA)
+)
+
+ATL=cell %>% dplyr::filter(celltype == "ATL") %>% pull(barcode_new)
+BCELL=cell %>% dplyr::filter(celltype == "BCELL") %>% pull(barcode_new)
+DCT1=cell %>% dplyr::filter(celltype == "DCT1") %>% pull(barcode_new)
+DCT2=cell %>% dplyr::filter(celltype == "DCT2") %>% pull(barcode_new)
+ENDO=cell %>% dplyr::filter(celltype == "ENDO") %>% pull(barcode_new)
+FIB_VSMC_MC=cell %>% dplyr::filter(celltype == "FIB_VSMC_MC") %>% pull(barcode_new)
+ICA=cell %>% dplyr::filter(celltype == "ICA") %>% pull(barcode_new)
+ICB=cell %>% dplyr::filter(celltype == "ICB") %>% pull(barcode_new)
+MONO=cell %>% dplyr::filter(celltype == "MONO") %>% pull(barcode_new)
+PC=cell %>% dplyr::filter(celltype == "PC") %>% pull(barcode_new)
+PCT=cell %>% dplyr::filter(celltype == "PCT") %>% pull(barcode_new)
+PEC=cell %>% dplyr::filter(celltype == "PEC") %>% pull(barcode_new)
+PODO=cell %>% dplyr::filter(celltype == "PODO") %>% pull(barcode_new)
+PST=cell %>% dplyr::filter(celltype == "PST") %>% pull(barcode_new)
+PT_CD36=cell %>% dplyr::filter(celltype == "PT_CD36") %>% pull(barcode_new)
+PT_VCAM1=cell %>% dplyr::filter(celltype == "PT_VCAM1") %>% pull(barcode_new)
+TAL1=cell %>% dplyr::filter(celltype == "TAL1") %>% pull(barcode_new)
+TAL2=cell %>% dplyr::filter(celltype == "TAL2") %>% pull(barcode_new)
+TCELL=cell %>% dplyr::filter(celltype == "TCELL") %>% pull(barcode_new)
+
+Idents(kidney_sub, cells=ATL)="ATL"
+Idents(kidney_sub, cells=BCELL)="B_CELL"
+Idents(kidney_sub, cells=DCT1)="DCT1"
+Idents(kidney_sub, cells=DCT2)="DCT2"
+Idents(kidney_sub, cells=ENDO)="ENDO"
+Idents(kidney_sub, cells=FIB_VSMC_MC)="FIB_VSMC_MC"
+Idents(kidney_sub, cells=ICA)="ICA"
+Idents(kidney_sub, cells=ICB)="ICB"
+Idents(kidney_sub, cells=MONO)="MONO"
+Idents(kidney_sub, cells=PC)="PC"
+Idents(kidney_sub, cells=PCT)="PCT"
+Idents(kidney_sub, cells=PEC)="PEC"
+Idents(kidney_sub, cells=PODO)="PODO"
+Idents(kidney_sub, cells=PST)="PST"
+Idents(kidney_sub, cells=PT_CD36)="PT_CD36"
+Idents(kidney_sub, cells=PT_VCAM1)="PT_VCAM1"
+Idents(kidney_sub, cells=TAL1)="TAL1"
+Idents(kidney_sub, cells=TAL2)="TAL2"
+Idents(kidney_sub, cells=TCELL)="T_CELL"
+
+DimPlot(kidney_sub, label = T)
+kidney_sub@active.ident=factor(kidney_sub@active.ident, levels = c("PCT","PST","PT_VCAM1","TAL","DCT","CNT","PC","ICA","ICB","PODO","PEC","MES_FIB","ENDO","LEUK"))
+
+kidney_sub@assays$peaks@fragments[[1]]@path="/mnt/d/snATAC_public/outs/fragments.tsv.gz"
+kidney_sub@meta.data$celltype <- Idents(Skidney_sub)
+saveRDS(kidney_sub, file="D:/public_datasets/GSE195460_snATAC/GSE195460_snATAC.Rds")
