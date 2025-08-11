@@ -48,20 +48,20 @@ pheatmap(dar_aver[["peaks"]], scale = 'row', cluster_rows = T, cluster_cols = F,
     
 PEC1=list.cluster.dar[[1]] %>% select("query_region")
 PEC1=data.frame(do.call('rbind', strsplit(as.character(PEC1$query_region), split='-', fixed=T))) 
-write.table(APEMP, file = "./PEC1.txt", sep = "\t")
+write.table(APEMP, file = "./DAR_PEC1.txt", sep = "\t")
 
 PEC2=list.cluster.dar[[2]] %>% select("query_region")
 PEC2=data.frame(do.call('rbind', strsplit(as.character(PEC2$query_region), split='-', fixed=T))) 
-write.table(TC, file = "./PEC2.txt", sep = "\t")
+write.table(TC, file = "./DAR_PEC2.txt", sep = "\t")
 
 Prepodocyte=list.cluster.dar[[3]] %>% select("query_region")
 Prepodocyte=data.frame(do.call('rbind', strsplit(as.character(Prepodocyte$query_region), split='-', fixed=T))) 
-write.table(PCP, file = "./Prepodocyte.txt", sep = "\t")
+write.table(PCP, file = "./DAR_Prepodocyte.txt", sep = "\t")
 
 Podocyte1=list.cluster.dar[[4]] %>% select("query_region")
 Podocyte1=data.frame(do.call('rbind', strsplit(as.character(Podocyte1$query_region), split='-', fixed=T))) 
-write.table(HP, file = "./Podocyte1.txt", sep = "\t")
+write.table(HP, file = "./DAR_Podocyte1.txt", sep = "\t")
 
 Podocyte3=list.cluster.dar[[5]] %>% select("query_region")
 Podocyte3=data.frame(do.call('rbind', strsplit(as.character(Podocyte3$query_region), split='-', fixed=T))) 
-write.table(DP, file = "./Podocyte3.txt", sep = "\t")
+write.table(DP, file = "./DAR_Podocyte3.txt", sep = "\t")
