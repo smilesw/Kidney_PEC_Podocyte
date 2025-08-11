@@ -71,7 +71,6 @@ S1[["DAR_podocyte3"]] <- CreateChromatinAssay(
 
 # coverage plot
 region <- "chr1-155299000-155301462" #PKLR
-region <- "chr17-7215125-7227267" #ACADVL
 region <- "chr9-101421388-101436287" #ALDOB
 region <- "chr7-73591201-73626522" #MLXIPL
 
