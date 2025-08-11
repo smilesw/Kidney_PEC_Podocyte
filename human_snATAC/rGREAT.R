@@ -23,6 +23,6 @@ for (cell_state in ident) {
   tb <- getEnrichmentTables(job)
   sheetname=c("GO_MF","GO_BP","GO_CC")
   
-  out_file <- file.path(output_dir, paste0(cell_state, "_GREAT_2nd.xlsx"))
+  out_file <- file.path(output_dir, paste0(cell_state, "_GREAT.xlsx"))
   write.xlsx(tb, file = out_file, sheetName = sheetname, rowNames = F)
 }
