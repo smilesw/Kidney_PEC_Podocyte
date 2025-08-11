@@ -8,7 +8,7 @@ output_dir <- "D:/public_datasets/GSE195460_snATAC/rGREAT"
 
 for (cell_state in ident) {
   message("Processing sheet: ", cell_state)
-  df <- read.xlsx("D:/public_datasets/GSE195460_snATAC/Homer/DAR.xlsx", sheet = cell_state)
+  df <- read.xlsx("D:/public_datasets/GSE195460_snATAC/DAR.xlsx", sheet = cell_state)
 
   peaks_df <- data.frame(peak = df$query_region)
   peak_coords <- do.call(rbind, strsplit(peaks_df$peak, "-"))
