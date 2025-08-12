@@ -14,7 +14,6 @@ res.table = c()
 ## Go through a series of error probabilities
 for (err_prob in c(0.5, 0.4, 0.3, 0.25, 0.2, 0.15, 0.1, 0.05)) {
   tip.exp <- generateNull(data, n=100000, p=err_prob);
-  ## Sham vs MI-day 3
   res.1 = two.class.test(data, tip.exp, cond.control="CTL", cond.treatment="DKD",to.plot=F)
   res.table = rbind(res.table, res.1)}
 rownames(res.table) = as.character(c(0.5, 0.4, 0.3, 0.25, 0.2, 0.15, 0.1, 0.05))
