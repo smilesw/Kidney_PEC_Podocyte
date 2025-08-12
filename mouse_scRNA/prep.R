@@ -3,6 +3,7 @@ library(Matrix)
 library(SeuratWrappers)
 library(SeuratData)
 library(data.table)
+library(here)
 sample_list <- list.files()
 sampleNames = mapply(function(x) x[length(x)], strsplit(sample_list, split = '-'))
 meta.info = data.table(file_Path = sample_list)
@@ -14,26 +15,19 @@ DT::datatable(meta.info)
 norm_method = 'standard'
 treat = FALSE
 show = FALSE
-MT_cut =50
 batch_list = list()
 for(i in 1:nrow(meta.info)){
-  dir_of_10X = meta.info$file_Path[i]
+  outs = meta.info$file_Path[i]
   sampleID = meta.info$sampleID[i]
   group = meta.info$group[i]
   sample = meta.info$sample[i]
   print(paste("Starting processing", sampleID, 'at', Sys.time()))
-  mat = Read10X(dir_of_10X)
+  mat <- Read10X_h5(here(outs,"raw_feature_bc_matrix_cellbender_filtered.h5"))
   
   kidney <- CreateSeuratObject(counts = mat, project = sampleID)
   
   kidney[["percent.mt"]] <- PercentageFeatureSet(kidney, pattern = "^mt-")
-  
-  qc = VlnPlot(kidney, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
-  
-  plot1 <- FeatureScatter(kidney, feature1 = "nCount_RNA", feature2 = "percent.mt")
-  plot2 <- FeatureScatter(kidney, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
-  
-  kidney <- subset(kidney, percent.mt < MT_cut & nFeature_RNA <= 3000 & nFeature_RNA >= 300)
+  kidney <- subset(kidney, percent.mt < 50 & nFeature_RNA <= 3000 & nFeature_RNA >= 300)
   
   if(norm_method == 'SCT'){
     kidney <- SCTransform(kidney, vars.to.regress = 'percent.mt')
@@ -41,8 +35,6 @@ for(i in 1:nrow(meta.info)){
     kidney <- NormalizeData(kidney, verbose = F)
     kidney <- FindVariableFeatures(kidney, selection.method = "vst", 
                                    nfeatures = 2000, verbose = FALSE)
-    
-    kidney <- ScaleData(kidney, verbose = F)
   }
   
   kidney <- RenameCells(object = kidney, add.cell.id = sampleID)  # add sample name as prefix
